@@ -1,0 +1,22 @@
+[Logger]
+FileName = "./logs/driver.log"
+LogLevel = "INFO"
+
+[Clients]
+[Clients.Core]
+Address = "127.0.0.1:57081"
+UseTLS = false
+CertFilePath = ""
+ClientId = ""
+Username = ""
+Password = ""
+
+[Service]
+ID = "11571464"
+Name = "MODBUS TCP协议驱动-11571464"
+Activated = false
+[Service.Server]
+Address = "0.0.0.0:33121"
+UseTLS = false
+CertFile = ""
+KeyFile = ""
