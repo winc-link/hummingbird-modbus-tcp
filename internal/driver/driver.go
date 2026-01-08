@@ -17,6 +17,7 @@ package driver
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"github.com/winc-link/hummingbird-modbus-tcp/constant"
 	"github.com/winc-link/hummingbird-modbus-tcp/dtos"
 	"github.com/winc-link/hummingbird-modbus-tcp/internal/devicemanage"
@@ -34,18 +35,25 @@ type ModbusTcpProtocolDriver struct {
 	manager *devicemanage.DeviceManager
 }
 
+func (dr ModbusTcpProtocolDriver) HandlePropertyReportDebug(ctx context.Context, deviceId string, data model.PropertyReport) error {
+	return nil
+}
+
+func (dr ModbusTcpProtocolDriver) HandleEventReportDebug(ctx context.Context, deviceId string, data model.EventReport) error {
+	return nil
+}
+
 // DeviceNotify 设备添加/修改/删除通知
 func (dr ModbusTcpProtocolDriver) DeviceNotify(ctx context.Context, t commons.DeviceNotifyType, deviceId string, device model.Device) error {
 	switch t {
 	case commons.DeviceAddNotify, commons.DeviceUpdateNotify:
-		//dr.sd.GetLogger().Info("DeviceNotify ", "deviceId", deviceId, t)
 		device.Id = deviceId
-		//b, _ := json.Marshal(device)
-		//fmt.Println(string(b))
-		//fmt.Println("tran:", tranDeviceToMangeDeviceModel(dr.sd, device))
-		dr.manager.AddOrUpdateDevice(tranDeviceToMangeDeviceModel(dr.sd, device))
+		deviceM, err := tranDeviceToMangeDeviceModel(dr.sd, device)
+		if err != nil {
+			return err
+		}
+		dr.manager.AddOrUpdateDevice(deviceM)
 	case commons.DeviceDeleteNotify:
-		//dr.sd.GetLogger().Info("DeviceDeleteNotify", "deviceId", deviceId)
 		dr.manager.RemoveDevice(deviceId)
 	}
 	return nil
@@ -220,10 +228,20 @@ func (dr ModbusTcpProtocolDriver) HandleServiceExecute(ctx context.Context, devi
 	return nil
 }
 
-func tranDeviceToMangeDeviceModel(sd *service.DriverService, dev model.Device) devicemanage.Device {
+func tranDeviceToMangeDeviceModel(sd *service.DriverService, dev model.Device) (devicemanage.Device, error) {
+	if dev.Ip == "" {
+		sd.GetLogger().Errorf("failed to convert deviceName [%s] device ip is empty %s", dev.Name)
+		return devicemanage.Device{}, errors.New("device ip is empty")
+	}
+	if !cast.IsValidIP(dev.Ip) {
+		sd.GetLogger().Errorf("failed to convert deviceName [%s] device ip is invalid", dev.Name)
+		return devicemanage.Device{}, errors.New("device ip is invalid")
+	}
+
 	port, err := strconv.Atoi(dev.Port)
 	if err != nil {
 		sd.GetLogger().Errorf("failed to convert deviceName [%s] port to int: %s", dev.Name, err.Error())
+		return devicemanage.Device{}, errors.New("failed to convert deviceName to int")
 	}
 	period, err := strconv.Atoi(dev.Period)
 	if err != nil {
@@ -234,11 +252,12 @@ func tranDeviceToMangeDeviceModel(sd *service.DriverService, dev model.Device) d
 		sd.GetLogger().Errorf("failed to convert deviceName [%s] slaveId to int: %s", dev.Name, err.Error())
 	}
 
-	var periodt time.Duration
+	var periodTime time.Duration
 	if period <= 0 {
-		periodt = 24 * time.Hour * 365
+		sd.GetLogger().Errorf("failed to convert deviceName [%s] period %d", dev.Name, period)
+		periodTime = 24 * time.Hour * 365
 	} else {
-		periodt = time.Duration(period) * time.Second
+		periodTime = time.Duration(period) * time.Second
 	}
 
 	return devicemanage.Device{
@@ -246,9 +265,9 @@ func tranDeviceToMangeDeviceModel(sd *service.DriverService, dev model.Device) d
 		IP:        dev.Ip,
 		Port:      port,
 		ProductId: dev.ProductId,
-		Period:    periodt,
+		Period:    periodTime,
 		SlaveId:   slaveId,
-	}
+	}, nil
 }
 
 // NewModbusTcpProtocolDriver 协议驱动
@@ -257,7 +276,11 @@ func NewModbusTcpProtocolDriver(sd *service.DriverService) *ModbusTcpProtocolDri
 	manager.Start()
 
 	for _, device := range sd.GetDeviceList() {
-		manager.AddOrUpdateDevice(tranDeviceToMangeDeviceModel(sd, device))
+		deviceM, err := tranDeviceToMangeDeviceModel(sd, device)
+		if err != nil {
+			continue
+		}
+		manager.AddOrUpdateDevice(deviceM)
 	}
 	devicemanage.SDKDriver = sd
 	return &ModbusTcpProtocolDriver{

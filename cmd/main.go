@@ -7,10 +7,10 @@ import (
 )
 
 func main() {
-	driverService := service.NewDriverService("official-modbus-tcp-v2.7")
+	driverService := service.NewDriverService("official-modbus-tcp-v3.0")
 	config.InitConfig(driverService)
-	tcpDriver := driver.NewModbusTcpProtocolDriver(driverService)
-	if err := driverService.Start(tcpDriver); err != nil {
+	modbusTcpDriver := driver.NewModbusTcpProtocolDriver(driverService)
+	if err := driverService.Start(modbusTcpDriver); err != nil {
 		driverService.GetLogger().Error("driver service start error: %s", err)
 		return
 	}

@@ -18,6 +18,8 @@ import (
 	"github.com/goburrow/modbus"
 )
 
+const maxRetry = 3
+
 var SDKDriver *service.DriverService
 
 type Device struct {
@@ -85,25 +87,12 @@ func (w *DeviceWorker) Start() {
 		ticker := time.NewTicker(w.device.Period)
 		defer ticker.Stop()
 
-		//address := fmt.Sprintf("%s:%d", w.device.IP, w.device.Port)
 		for {
 			select {
 			case <-ticker.C:
 				if w.handler == nil || w.client == nil {
 					w.connect()
 				}
-				//if w.handler == nil || w.client == nil {
-				//	h := modbus.NewTCPClientHandler(address)
-				//	h.Timeout = 3 * time.Second
-				//	h.SlaveId = byte(w.device.SlaveId)
-				//	if err := h.Connect(); err != nil {
-				//		w.updateStatus(false, err.Error())
-				//		continue
-				//	}
-				//	SDKDriver.Online(w.device.ID)
-				//	w.handler = h
-				//	w.client = modbus.NewClient(h)
-				//}
 				//采集设备数据然后上报。
 				w.collectDataAndReport()
 			case <-w.ctx.Done():
@@ -139,10 +128,28 @@ func (w *DeviceWorker) collectDataAndReport() {
 		}
 		var (
 			value []byte
+			//readErr error
 		)
 		switch modbusSpec.RegisterType {
 		case string(constant.CoilStatus):
 			value, err = w.client.ReadCoils(uint16(address), cast.GetQuantityByDataType(modbusSpec.DataType))
+
+			//for i := 0; i < maxRetry; i++ {
+			//	value, readErr = w.client.ReadCoils(uint16(address), cast.GetQuantityByDataType(modbusSpec.DataType))
+			//
+			//	if readErr == nil {
+			//		break
+			//	}
+			//
+			//	// 判断是否是超时错误（根据你实际库的错误类型调整）
+			//	if strings.Contains(readErr.Error(), "timeout") {
+			//		if i < maxRetry-1 {
+			//			time.Sleep(100 * time.Millisecond)
+			//			continue
+			//		}
+			//	}
+			//}
+
 		case string(constant.InputStatus):
 			value, err = w.client.ReadDiscreteInputs(uint16(address), cast.GetQuantityByDataType(modbusSpec.DataType))
 		case string(constant.HoldingRegister):
@@ -161,9 +168,8 @@ func (w *DeviceWorker) collectDataAndReport() {
 			continue
 		}
 		v := cast.ConvertByteToInt(modbusSpec.DataType, modbusSpec.DataOrder, modbusSpec.Multiplier, value)
-
+		SDKDriver.GetLogger().Infof("address:%v value:%s", address, v)
 		reportData[property.Code] = v
-
 	}
 	if len(reportData) == 0 {
 		return
