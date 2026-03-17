@@ -17,8 +17,10 @@ package driver
 import (
 	"context"
 	"encoding/json"
+	"github.com/winc-link/hummingbird-modbus-tcp/config"
 	"github.com/winc-link/hummingbird-modbus-tcp/constant"
 	"github.com/winc-link/hummingbird-modbus-tcp/dtos"
+	"github.com/winc-link/hummingbird-modbus-tcp/internal/connmanage"
 	"github.com/winc-link/hummingbird-modbus-tcp/internal/devicemanage"
 	"github.com/winc-link/hummingbird-modbus-tcp/utils/cast"
 	"strconv"
@@ -253,15 +255,43 @@ func tranDeviceToMangeDeviceModel(sd *service.DriverService, dev model.Device) d
 
 // NewModbusTcpProtocolDriver 协议驱动
 func NewModbusTcpProtocolDriver(sd *service.DriverService) *ModbusTcpProtocolDriver {
-	manager := devicemanage.NewDeviceManager()
-	manager.Start()
+	cfg := config.GetConfig()
+	if cfg.Model == constant.DeviceDTUModel {
+		manager := devicemanage.NewDtuDeviceManager()
+		manager.Start()
 
-	for _, device := range sd.GetDeviceList() {
-		manager.AddOrUpdateDevice(tranDeviceToMangeDeviceModel(sd, device))
-	}
-	devicemanage.SDKDriver = sd
-	return &ModbusTcpProtocolDriver{
-		sd:      sd,
-		manager: manager,
+		for _, device := range sd.GetDeviceList() {
+			sd.GetLogger().Infof("向全局变量注册 deviceSn: %s", device.Name)
+
+			port, err := strconv.Atoi(device.Port)
+			if err != nil {
+				sd.GetLogger().Errorf("failed to convert deviceName [%s] port to int: %s", device.Name, err.Error())
+			}
+			conn, err := connmanage.NewModbusTCPClient(device.Ip, port)
+			if err != nil {
+				sd.GetLogger().Errorf("failed to convert deviceName [%s] port to int: %s", device.Name, err.Error())
+				continue
+			}
+			connmanage.DtuClientManage.AddOrUpdateDtuConnectManager(device.Ip+":"+device.Port, conn)
+
+			manager.AddOrUpdateDevice(tranDeviceToMangeDeviceModel(sd, device))
+		}
+		devicemanage.SDKDriver = sd
+		return &ModbusTcpProtocolDriver{
+			sd: sd,
+			//manager: manager,
+		}
+	} else {
+		manager := devicemanage.NewDeviceManager()
+		manager.Start()
+
+		for _, device := range sd.GetDeviceList() {
+			manager.AddOrUpdateDevice(tranDeviceToMangeDeviceModel(sd, device))
+		}
+		devicemanage.SDKDriver = sd
+		return &ModbusTcpProtocolDriver{
+			sd:      sd,
+			manager: manager,
+		}
 	}
 }

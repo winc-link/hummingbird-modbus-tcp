@@ -7,7 +7,7 @@ WORKDIR /simple-driver
 
 COPY . .
 
-RUN go build -ldflags "-s -w" -o  ./cmd/build/driver-linux-amd64  ./cmd
+RUN #go build -ldflags "-s -w" -o  ./cmd/build/driver-linux-amd64  ./cmd
 
 FROM registry.cn-shanghai.aliyuncs.com/winc-edgex/alpine:3.13
 

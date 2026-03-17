@@ -9,6 +9,7 @@ import (
 var baseConfig *BaseConfig
 
 type BaseConfig struct {
+	Model string `json:"model"`
 }
 
 func InitConfig(sd *service.DriverService) {

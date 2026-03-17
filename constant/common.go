@@ -27,3 +27,7 @@ const (
 	ServiceExecute                          //服务调用
 	ServiceExecuteReplyOperation            //服务调用响应
 )
+
+const (
+	DeviceDTUModel = "dtu"
+)
